@@ -123,15 +123,12 @@ local function format_song_display(song)
 end
 
 local function format_album_display(album)
-  local year = album.year and tostring(album.year) or '----'
   local artist = album.artist or album.displayArtist or 'Unknown artist'
   local count = tonumber(album.songCount or 0)
   return lc.style.line {
-    warm(year),
-    dim '  ',
-    titlec(album.name or album.id),
+    warm(album.name or album.id),
     dim '  ·  ',
-    accent(artist),
+    mag(artist),
     dim '  ·  ',
     okc(count),
     dim ' tracks',
@@ -186,43 +183,43 @@ local function root_entries()
       key = 'playlist',
       kind = 'section',
       title = 'Playlists',
-      display = lc.style.line { accent '󰲹', dim '  ', accent 'playlist' },
+      display = lc.style.line { accent '󰲹', dim '  ', accent 'Playlist' },
     },
     {
       key = 'artist',
       kind = 'section',
       title = 'Artists',
-      display = lc.style.line { mag '󰎂', dim '  ', mag 'artist' },
+      display = lc.style.line { mag '󰎂', dim '  ', mag 'Artist' },
     },
     {
       key = 'album',
       kind = 'section',
       title = 'Albums',
-      display = lc.style.line { warm '󰀥', dim '  ', warm 'album' },
+      display = lc.style.line { warm '󰀥', dim '  ', warm 'Album' },
     },
     {
       key = 'player',
       kind = 'section',
       title = 'Player Queue',
-      display = lc.style.line { okc '󰐊', dim '  ', okc 'player' },
+      display = lc.style.line { okc '󰐊', dim '  ', okc 'Player' },
     },
     {
       key = 'random',
       kind = 'section',
       title = 'Random Songs',
-      display = lc.style.line { okc '', dim '  ', okc 'random' },
+      display = lc.style.line { okc '', dim '  ', okc 'Random' },
     },
     {
       key = 'starred',
       kind = 'section',
       title = 'Starred Songs',
-      display = lc.style.line { accent '', dim '  ', accent 'starred' },
+      display = lc.style.line { accent '', dim '  ', accent 'Starred' },
     },
     {
       key = 'search',
       kind = 'section',
       title = 'Search',
-      display = lc.style.line { titlec '󰍉', dim '  ', titlec 'search' },
+      display = lc.style.line { titlec '󰍉', dim '  ', titlec 'Search' },
     },
   }
 end
@@ -1037,7 +1034,7 @@ local function player_preview(entry)
     kv_line('Starred', tostring(meta.starred ~= nil and meta.starred ~= ''), 'accent'),
     kv_line('Duration', format_duration(meta.duration)),
     '',
-    lc.style.line { dim 'space = pause/play, n = next, p = previous, Enter = jump to selected' },
+    lc.style.line { dim 'space = pause/play, n = next, p = previous, + = volume up, - = volume down, Enter = jump to selected' },
   }
 end
 
@@ -1185,6 +1182,25 @@ function M.setup(opt)
       lc.cmd 'reload'
     end)
   end)
+
+  local function adjust_player_volume(delta)
+    if lc.api.get_current_path()[1] ~= 'player' then return end
+    mpv.player_adjust_volume(delta, function(volume, err)
+      if err then
+        show_error(err)
+        return
+      end
+      if type(volume) == 'number' then
+        show_info(string.format('Volume %.0f%%', volume))
+      else
+        show_info 'Volume updated'
+      end
+      lc.cmd 'reload'
+    end)
+  end
+
+  lc.keymap.set('main', '+', function() adjust_player_volume(5) end)
+  lc.keymap.set('main', '-', function() adjust_player_volume(-5) end)
 
   start_player_poll()
 end

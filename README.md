@@ -4,7 +4,7 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 
 ## 功能
 
-- 一级目录：`playlist`、`artist`、`album`、`player`、`random`、`starred`、`search`
+- 一级目录显示：`Playlist`、`Artist`、`Album`、`Player`、`Random`、`Starred`、`Search`
 - 二级目录：
   - `playlist` -> 歌单列表
   - `artist` -> 艺术家列表
@@ -84,6 +84,8 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 - `n`: 在 `player` 页下一曲
 - `p`: 在 `player` 页上一曲
 - `P`: 在 `player` 页恢复播放
+- `+`: 在 `player` 页增大音量
+- `-`: 在 `player` 页减小音量
 - `R`: 清空插件缓存并刷新
 
 ## 说明

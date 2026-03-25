@@ -212,6 +212,23 @@ function M.player_toggle_pause(cb) mpv_request({ 'cycle', 'pause' }, cb) end
 
 function M.player_play(cb) mpv_request({ 'set_property', 'pause', false }, cb) end
 
+function M.player_adjust_volume(delta, cb)
+  mpv_request({ 'add', 'volume', delta }, function(_, err)
+    if err then
+      cb(nil, err)
+      return
+    end
+
+    mpv_request_no_spawn({ 'get_property', 'volume' }, function(response, volume_err)
+      if volume_err then
+        cb(true)
+        return
+      end
+      cb(response and response.data or true)
+    end)
+  end)
+end
+
 function M.player_jump(index, cb)
   mpv_request({ 'set_property', 'playlist-pos', index }, function(_, err)
     if err then
