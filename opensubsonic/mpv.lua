@@ -3,6 +3,7 @@ local config = require 'opensubsonic.config'
 
 local state = {
   mpv_starting = false,
+  mpv_owned = false,
   mpv_waiters = {},
   queue_meta = {},
 }
@@ -18,6 +19,7 @@ local function finish_waiters(ok, err)
   local waiters = state.mpv_waiters
   state.mpv_waiters = {}
   state.mpv_starting = false
+  if not ok then state.mpv_owned = false end
   for _, waiter in ipairs(waiters) do
     waiter(ok, err)
   end
@@ -109,6 +111,7 @@ local function ensure_mpv(cb)
 
   probe_mpv(function(ok)
     if ok then
+      state.mpv_owned = false
       cb(true)
       return
     end
@@ -117,15 +120,16 @@ local function ensure_mpv(cb)
     if state.mpv_starting then return end
 
     state.mpv_starting = true
+    local cfg = current_cfg()
     if socket_exists() then lc.fs.remove(cfg.mpv_socket) end
 
     local cmd = { 'mpv' }
-    local cfg = current_cfg()
     for _, arg in ipairs(cfg.mpv_args or {}) do
       table.insert(cmd, arg)
     end
     table.insert(cmd, '--input-ipc-server=' .. cfg.mpv_socket)
     lc.system.spawn(cmd)
+    state.mpv_owned = true
     wait_for_socket(1)
   end)
 end
@@ -240,6 +244,11 @@ function M.player_jump(index, cb)
 end
 
 function M.quit(cb)
+  if not state.mpv_owned then
+    if cb then cb(true) end
+    return
+  end
+
   if not socket_exists() then
     if cb then cb(true) end
     return
@@ -257,9 +266,11 @@ function M.quit(cb)
 end
 
 function M.quit_sync()
+  if not state.mpv_owned then return true end
   if not socket_exists() then return true end
   local body, err = socket_request_raw_sync(lc.json.encode { command = { 'quit' } })
   if not body and err and err ~= 'mpv not running' then return nil, err end
+  state.mpv_owned = false
   return true
 end
 

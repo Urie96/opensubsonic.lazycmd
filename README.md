@@ -46,11 +46,15 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 
       stream_format = 'raw',
       max_bitrate = nil,
+      -- 默认会为每个 lazycmd 实例生成独立 socket。
+      -- 只有你明确想让多个实例共享同一个 mpv 时，才手动固定这个路径。
       mpv_socket = '/tmp/lazycmd-opensubsonic-mpv.sock',
     }
   end,
 },
 ```
+
+默认情况下，插件会为当前 lazycmd 进程生成独立的 `mpv` IPC socket，避免多个实例互相影响。只有显式配置同一个 `mpv_socket` 时，多个实例才会共享同一个 `mpv`。
 
 ## 环境变量
 
