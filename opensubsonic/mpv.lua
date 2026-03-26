@@ -6,9 +6,16 @@ local state = {
   mpv_owned = false,
   mpv_waiters = {},
   queue_meta = {},
+  sock = nil,
+  sock_path = nil,
+  next_request_id = 0,
+  pending_requests = {},
+  player_event_cb = nil,
+  player_observing = false,
 }
 
 local function current_cfg() return config.get() end
+local socket_send
 
 local function socket_exists()
   local cfg = current_cfg()
@@ -25,54 +32,138 @@ local function finish_waiters(ok, err)
   end
 end
 
-local function socket_request_raw(message, cb)
-  local cfg = current_cfg()
-  lc.system.socket_request({
-    path = cfg.mpv_socket,
-    message = message,
-  }, function(response)
-    if not response.success then
-      cb(nil, response.error or 'socket request failed')
-      return
-    end
-    cb(response.body)
-  end)
+local function wrap_once(cb)
+  local done = false
+  return function(...)
+    if done then return end
+    done = true
+    cb(...)
+  end
 end
 
-local function socket_request_raw_sync(message)
+local function fail_pending_requests(err)
+  local pending = state.pending_requests
+  state.pending_requests = {}
+  for _, cb in pairs(pending) do
+    cb(nil, err or 'mpv socket closed')
+  end
+end
+
+local function close_socket(err)
+  local sock = state.sock
+  state.sock = nil
+  state.sock_path = nil
+  state.player_observing = false
+  if sock then pcall(function() sock:close() end) end
+  fail_pending_requests(err)
+end
+
+local function emit_player_event(event)
+  if state.player_event_cb then state.player_event_cb(event) end
+end
+
+local function handle_socket_line(line)
+  local ok, decoded = pcall(lc.json.decode, line or '')
+  if not ok or type(decoded) ~= 'table' then return end
+
+  if decoded.event then
+    if decoded.event == 'property-change' then emit_player_event(decoded) end
+    if decoded.event == 'shutdown' then
+      emit_player_event(decoded)
+      close_socket 'mpv socket closed'
+    end
+    return
+  end
+
+  local request_id = decoded.request_id
+  if request_id == nil then return end
+
+  local cb = state.pending_requests[request_id]
+  state.pending_requests[request_id] = nil
+  if cb then cb(decoded) end
+end
+
+local function ensure_socket()
   local cfg = current_cfg()
-  local response = lc.system.socket_request_sync {
-    path = cfg.mpv_socket,
-    message = message,
-  }
-  if not response.success then return nil, response.error or 'socket request failed' end
-  return response.body
+  if state.sock and state.sock_path == cfg.mpv_socket then return state.sock end
+
+  if state.sock then close_socket 'mpv socket reset' end
+
+  local sock = lc.socket.connect('unix:' .. cfg.mpv_socket)
+  sock:on_line(function(line) handle_socket_line(line) end)
+  state.sock = sock
+  state.sock_path = cfg.mpv_socket
+  return sock
+end
+
+local function ensure_player_observers()
+  if state.player_observing then return end
+  state.player_observing = true
+
+  socket_send({ command = { 'observe_property', 1, 'pause' } })
+  socket_send({ command = { 'observe_property', 2, 'playlist' } })
+  socket_send({ command = { 'observe_property', 3, 'playlist-pos' } })
+  socket_send({ command = { 'observe_property', 4, 'idle-active' } })
+  socket_send({ command = { 'observe_property', 5, 'volume' } })
+end
+
+socket_send = function(payload, cb)
+  if not socket_exists() then
+    if cb then cb(nil, 'mpv not running') end
+    return
+  end
+
+  local sock
+  local ok, result = pcall(ensure_socket)
+  if ok then
+    sock = result
+  else
+    close_socket(result)
+    if cb then cb(nil, tostring(result)) end
+    return
+  end
+
+  if cb then cb = wrap_once(cb) end
+
+  local request_id = state.next_request_id + 1
+  state.next_request_id = request_id
+  payload.request_id = request_id
+
+  if cb then state.pending_requests[request_id] = cb end
+
+  local write_ok, write_err = pcall(function() sock:write(lc.json.encode(payload)) end)
+  if write_ok then return end
+
+  state.pending_requests[request_id] = nil
+  close_socket(write_err)
+  if cb then cb(nil, tostring(write_err)) end
 end
 
 local function mpv_request_no_spawn(command, cb)
   if not socket_exists() then
+    close_socket 'mpv not running'
     cb(nil, 'mpv not running')
     return
   end
 
-  socket_request_raw(lc.json.encode { command = command }, function(body, err)
-    if err then
+  ensure_player_observers()
+
+  socket_send({ command = command }, function(response, err)
+    if err or not response then
       cb(nil, err)
       return
     end
 
-    local ok, decoded = pcall(lc.json.decode, body or '')
-    if not ok then
-      cb(nil, 'failed to decode mpv response')
+    if response.error and response.error ~= 'success' then
+      cb(nil, response.error)
       return
     end
-
-    if decoded.error and decoded.error ~= 'success' then
-      cb(nil, decoded.error)
-      return
-    end
-    cb(decoded)
+    cb(response)
   end)
+end
+
+function M.on_player_event(cb)
+  state.player_event_cb = cb
 end
 
 local function probe_mpv(cb)
@@ -82,6 +173,7 @@ local function probe_mpv(cb)
       return
     end
     local cfg = current_cfg()
+    close_socket(err)
     if socket_exists() then lc.fs.remove(cfg.mpv_socket) end
     cb(nil, err)
   end)
@@ -121,6 +213,7 @@ local function ensure_mpv(cb)
 
     state.mpv_starting = true
     local cfg = current_cfg()
+    close_socket 'mpv restarting'
     if socket_exists() then lc.fs.remove(cfg.mpv_socket) end
 
     local cmd = { 'mpv' }
@@ -255,22 +348,39 @@ function M.quit(cb)
   end
 
   mpv_request_no_spawn({ 'quit' }, function(_, err)
-    if cb then
-      if err and err ~= 'mpv not running' then
-        cb(nil, err)
-      else
-        cb(true)
-      end
+    if err and err ~= 'mpv not running' then
+      if cb then cb(nil, err) end
+      return
     end
+
+    state.mpv_owned = false
+    close_socket 'mpv socket closed'
+    if cb then cb(true) end
   end)
 end
 
 function M.quit_sync()
   if not state.mpv_owned then return true end
   if not socket_exists() then return true end
-  local body, err = socket_request_raw_sync(lc.json.encode { command = { 'quit' } })
-  if not body and err and err ~= 'mpv not running' then return nil, err end
+  local sock
+  local ok, result = pcall(ensure_socket)
+  if ok then
+    sock = result
+  else
+    close_socket(result)
+    return nil, tostring(result)
+  end
+
+  local write_ok, write_err = pcall(function()
+    sock:write(lc.json.encode { command = { 'quit' } })
+  end)
+  if not write_ok then
+    close_socket(write_err)
+    return nil, tostring(write_err)
+  end
+
   state.mpv_owned = false
+  close_socket 'mpv socket closed'
   return true
 end
 

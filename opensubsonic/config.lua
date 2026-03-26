@@ -1,11 +1,5 @@
 local M = {}
 
-local function default_mpv_socket()
-  local tmp = os.tmpname()
-  if tmp and tmp ~= '' then return tmp .. '.sock' end
-  return string.format('/tmp/lazycmd-opensubsonic-mpv-%d.sock', os.time())
-end
-
 local cfg = {
   url = os.getenv 'OPENSUBSONIC_URL',
   username = os.getenv 'OPENSUBSONIC_USER',
@@ -19,7 +13,7 @@ local cfg = {
   search_song_count = 100,
   stream_format = 'raw',
   max_bitrate = nil,
-  mpv_socket = default_mpv_socket(),
+  mpv_socket = '/tmp/lazycmd-opensubsonic-mpv.sock',
   mpv_args = {
     '--idle=yes',
     '--no-video',

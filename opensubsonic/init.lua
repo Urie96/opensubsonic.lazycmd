@@ -5,7 +5,7 @@ local mpv = require 'opensubsonic.mpv'
 
 local state = {
   page_entries = {},
-  player_snapshot = nil,
+  player_reload_pending = false,
 }
 
 local function path_key(path) return table.concat(path or {}, '\1') end
@@ -14,6 +14,11 @@ local function join_path(path) return table.concat(path or {}, '/') end
 local song_preview
 local refresh_current_page_entries
 local set_song_starred_local
+local create_playlist_from_input
+local player_keymap
+local song_keymap
+local playlist_keymap
+local search_keymap
 
 local function remember_entries(path, entries) state.page_entries[path_key(path)] = entries or {} end
 
@@ -184,6 +189,12 @@ local function root_entries()
       kind = 'section',
       title = 'Playlists',
       display = lc.style.line { accent '󰲹', dim '  ', accent 'Playlist' },
+      keymap = {
+        n = function()
+          lc.api.go_to { 'playlist' }
+          lc.defer_fn(create_playlist_from_input, 0)
+        end,
+      },
     },
     {
       key = 'artist',
@@ -220,7 +231,23 @@ local function root_entries()
       kind = 'section',
       title = 'Search',
       display = lc.style.line { titlec '󰍉', dim '  ', titlec 'Search' },
+      keymap = search_keymap(),
     },
+  }
+end
+
+local function open_search_input()
+  lc.input {
+    prompt = 'Search music',
+    placeholder = 'keyword',
+    on_submit = function(input)
+      local query = tostring(input or ''):trim()
+      if query == '' then
+        lc.api.go_to { 'search' }
+        return
+      end
+      lc.api.go_to { 'search', query }
+    end,
   }
 end
 
@@ -237,7 +264,24 @@ local function list_playlists(path, cb)
         kind = 'playlist',
         playlist = playlist,
         display = format_playlist_display(playlist),
+        keymap = playlist_keymap({
+          key = playlist.id,
+          kind = 'playlist',
+          playlist = playlist,
+        }),
       })
+    end
+    if #entries == 0 then
+      entries = {
+        {
+          key = 'empty',
+          kind = 'info',
+          display = lc.style.line { dim 'No playlists yet. Press n to create one.' },
+          keymap = {
+            n = create_playlist_from_input,
+          },
+        },
+      }
     end
     remember_entries(path, entries)
     cb(entries)
@@ -259,6 +303,13 @@ local function list_playlist_songs(path, playlist_id, cb)
         parent = playlist,
         source = 'playlist',
         display = format_song_display(song),
+        keymap = song_keymap({
+          key = song.id,
+          kind = 'song',
+          song = song,
+          parent = playlist,
+          source = 'playlist',
+        }),
       })
     end
     remember_entries(path, entries)
@@ -342,6 +393,13 @@ local function list_album_songs(path, album_id, cb)
         parent = album,
         source = 'album',
         display = format_song_display(song),
+        keymap = song_keymap({
+          key = song.id,
+          kind = 'song',
+          song = song,
+          parent = album,
+          source = 'album',
+        }),
       })
     end
     remember_entries(path, entries)
@@ -366,6 +424,13 @@ local function list_player_queue(path, cb)
         player_item = item,
         playlist_index = index - 1,
         display = format_player_entry(item),
+        keymap = player_keymap({
+          key = tostring(index - 1),
+          kind = 'player_song',
+          player = player,
+          player_item = item,
+          playlist_index = index - 1,
+        }),
       })
     end
 
@@ -378,25 +443,9 @@ local function list_player_queue(path, cb)
           display = lc.style.line {
             dim(player.running and 'mpv queue is empty' or 'mpv is not running'),
           },
+          keymap = player_keymap(),
         },
       }
-    end
-
-    state.player_snapshot = nil
-    if player then
-      local parts = {
-        player.running and '1' or '0',
-        player.pause and '1' or '0',
-      }
-      for _, item in ipairs(player.playlist or {}) do
-        table.insert(parts, table.concat({
-          tostring(item.current == true or item.playing == true),
-          tostring(item.id or ''),
-          tostring(item.filename or ''),
-          tostring(item.title or ''),
-        }, '\2'))
-      end
-      state.player_snapshot = table.concat(parts, '\1')
     end
 
     remember_entries(path, entries)
@@ -419,6 +468,12 @@ local function list_random_songs(path, cb)
         song = song,
         source = 'random',
         display = format_song_display(song),
+        keymap = song_keymap({
+          key = song.id,
+          kind = 'song',
+          song = song,
+          source = 'random',
+        }),
       })
     end
 
@@ -442,6 +497,12 @@ local function list_starred_songs(path, cb)
         song = song,
         source = 'starred',
         display = format_song_display(song),
+        keymap = song_keymap({
+          key = song.id,
+          kind = 'song',
+          song = song,
+          source = 'starred',
+        }),
       })
     end
 
@@ -459,6 +520,7 @@ local function list_search_root(path, cb)
         titlec 'Press s to search music',
         dim '  ·  uses search3',
       },
+      keymap = search_keymap(),
     },
   }
   remember_entries(path, entries)
@@ -490,6 +552,7 @@ local function list_search_groups(path, query, cb)
         search_kind = 'artist',
         count = #(result.artist or {}),
         display = format_search_kind_display('artist', #(result.artist or {})),
+        keymap = search_keymap(),
       },
       {
         key = 'album',
@@ -498,6 +561,7 @@ local function list_search_groups(path, query, cb)
         search_kind = 'album',
         count = #(result.album or {}),
         display = format_search_kind_display('album', #(result.album or {})),
+        keymap = search_keymap(),
       },
       {
         key = 'song',
@@ -506,6 +570,7 @@ local function list_search_groups(path, query, cb)
         search_kind = 'song',
         count = #(result.song or {}),
         display = format_search_kind_display('song', #(result.song or {})),
+        keymap = search_keymap(),
       },
     }
 
@@ -532,6 +597,7 @@ local function list_search_items(path, query, search_kind, cb)
           source = 'search',
           query = query,
           display = format_artist_display(item),
+          keymap = search_keymap(),
         })
       elseif search_kind == 'album' then
         table.insert(entries, {
@@ -541,6 +607,7 @@ local function list_search_items(path, query, search_kind, cb)
           source = 'search',
           query = query,
           display = format_album_display(item),
+          keymap = search_keymap(),
         })
       else
         table.insert(entries, {
@@ -550,6 +617,13 @@ local function list_search_items(path, query, search_kind, cb)
           source = 'search',
           query = query,
           display = format_song_display(item),
+          keymap = song_keymap({
+            key = item.id,
+            kind = 'song',
+            song = item,
+            source = 'search',
+            query = query,
+          }),
         })
       end
     end
@@ -562,6 +636,7 @@ local function list_search_items(path, query, search_kind, cb)
           query = query,
           search_kind = search_kind,
           display = lc.style.line { dim('No ' .. search_kind .. ' matched this query') },
+          keymap = search_keymap(),
         },
       }
     end
@@ -576,17 +651,16 @@ local function reload_if_player_visible()
   if path[1] == 'player' then lc.cmd 'reload' end
 end
 
-local function play_from_hovered()
-  local hovered = lc.api.page_get_hovered()
-  if not hovered or hovered.kind ~= 'song' then
+local function play_song_entry(target)
+  if not target or target.kind ~= 'song' or not target.song then
     lc.cmd 'enter'
     return
   end
 
-  local songs, entries = current_song_entries()
+  local _, entries = current_song_entries()
   local start = 1
   for index, entry in ipairs(entries or {}) do
-    if entry.kind == 'song' and entry.song and tostring(entry.song.id) == tostring(hovered.song.id) then
+    if entry.kind == 'song' and entry.song and tostring(entry.song.id) == tostring(target.song.id) then
       start = index
       break
     end
@@ -612,11 +686,10 @@ local function play_from_hovered()
   end)
 end
 
-local function append_hovered_song()
-  local hovered = lc.api.page_get_hovered()
-  if not hovered or hovered.kind ~= 'song' then return end
-  mpv.remember_song(hovered.song, api.stream_url)
-  mpv.append_tracks({ hovered.song }, api.stream_url, function(_, err)
+local function append_song_entry(target)
+  if not target or target.kind ~= 'song' or not target.song then return end
+  mpv.remember_song(target.song, api.stream_url)
+  mpv.append_tracks({ target.song }, api.stream_url, function(_, err)
     if err then
       show_error(err)
       return
@@ -626,11 +699,9 @@ local function append_hovered_song()
   end)
 end
 
-local function append_hovered_playlist()
-  local path = lc.api.get_current_path()
-  local hovered = lc.api.page_get_hovered()
-  if path[1] ~= 'playlist' or #path ~= 1 or not hovered or hovered.kind ~= 'playlist' then return end
-  api.list_playlist_songs(hovered.playlist.id, function(playlist, err)
+local function append_playlist_entry(target)
+  if not target or target.kind ~= 'playlist' or not target.playlist or not target.playlist.id then return end
+  api.list_playlist_songs(target.playlist.id, function(playlist, err)
     if err then
       show_error(err)
       return
@@ -652,15 +723,14 @@ local function append_hovered_playlist()
   end)
 end
 
-local function star_hovered_song()
-  local hovered = lc.api.page_get_hovered()
-  if not hovered then return false end
+local function toggle_song_star_entry(target)
+  if not target then return false end
 
   local song = nil
-  if hovered.kind == 'song' and hovered.song then
-    song = hovered.song
-  elseif hovered.kind == 'player_song' then
-    local item = hovered.player_item or {}
+  if target.kind == 'song' and target.song then
+    song = target.song
+  elseif target.kind == 'player_song' then
+    local item = target.player_item or {}
     local meta = item._meta or {}
     local song_id = meta.id or item.id
     if song_id then
@@ -697,9 +767,8 @@ local function star_hovered_song()
   return true
 end
 
-local function add_hovered_song_to_playlist()
-  local hovered = lc.api.page_get_hovered()
-  if not hovered or hovered.kind ~= 'song' or not hovered.song then return false end
+local function add_song_entry_to_playlist(target)
+  if not target or target.kind ~= 'song' or not target.song then return false end
 
   api.list_playlists(function(playlists, err)
     if err then
@@ -726,7 +795,7 @@ local function add_hovered_song_to_playlist()
     }, function(choice)
       if not choice then return end
 
-      api.add_song_to_playlist(choice, hovered.song.id, function(_, add_err)
+      api.add_song_to_playlist(choice, target.song.id, function(_, add_err)
         if add_err then
           show_error(add_err)
           return
@@ -739,17 +808,16 @@ local function add_hovered_song_to_playlist()
   return true
 end
 
-local function remove_hovered_song_from_playlist()
+local function remove_song_entry_from_playlist(target)
   local path = lc.api.get_current_path()
-  local hovered = lc.api.page_get_hovered()
-  if path[1] ~= 'playlist' or #path ~= 2 or not hovered or hovered.kind ~= 'song' then return false end
+  if path[1] ~= 'playlist' or #path ~= 2 or not target or target.kind ~= 'song' then return false end
 
   local entries = state.page_entries[path_key(path)] or {}
   local playlist_index = nil
   local song_count = 0
   for _, entry in ipairs(entries) do
     if entry.kind == 'song' and entry.song then
-      if hovered.song and tostring(entry.song.id) == tostring(hovered.song.id) and playlist_index == nil then
+      if target.song and tostring(entry.song.id) == tostring(target.song.id) and playlist_index == nil then
         playlist_index = song_count
       end
       song_count = song_count + 1
@@ -773,12 +841,10 @@ local function remove_hovered_song_from_playlist()
   return true
 end
 
-local function delete_hovered_playlist()
-  local path = lc.api.get_current_path()
-  local hovered = lc.api.page_get_hovered()
-  if path[1] ~= 'playlist' or #path ~= 1 or not hovered or hovered.kind ~= 'playlist' then return false end
+local function delete_playlist_entry(target)
+  if not target or target.kind ~= 'playlist' or not target.playlist then return false end
 
-  local playlist = hovered.playlist or {}
+  local playlist = target.playlist or {}
   lc.confirm {
     title = 'Delete Playlist',
     prompt = 'Delete playlist "' .. tostring(playlist.name or playlist.id or '?') .. '"?',
@@ -797,7 +863,7 @@ local function delete_hovered_playlist()
   return true
 end
 
-local function create_playlist_from_input()
+create_playlist_from_input = function()
   local path = lc.api.get_current_path()
   if path[1] ~= 'playlist' or #path ~= 1 then return false end
 
@@ -820,6 +886,119 @@ local function create_playlist_from_input()
   }
 
   return true
+end
+
+local function player_jump_to_entry(target)
+  if not target or target.kind ~= 'player_song' then
+    lc.cmd 'enter'
+    return
+  end
+
+  mpv.player_jump(target.playlist_index, function(_, err)
+    if err then
+      show_error(err)
+      return
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+local function player_next()
+  mpv.player_next(function(_, err)
+    if err then
+      show_error(err)
+      return
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+local function player_prev()
+  mpv.player_prev(function(_, err)
+    if err then
+      show_error(err)
+      return
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+local function player_toggle_pause()
+  mpv.player_toggle_pause(function(_, err)
+    if err then
+      show_error(err)
+      return
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+local function player_play()
+  mpv.player_play(function(_, err)
+    if err then
+      show_error(err)
+      return
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+local function adjust_player_volume(delta)
+  mpv.player_adjust_volume(delta, function(volume, err)
+    if err then
+      show_error(err)
+      return
+    end
+    if type(volume) == 'number' then
+      show_info(string.format('Volume %.0f%%', volume))
+    else
+      show_info 'Volume updated'
+    end
+    lc.cmd 'reload'
+  end)
+end
+
+player_keymap = function(target)
+  local keymap = {
+    n = player_next,
+    p = player_prev,
+    ['<space>'] = player_toggle_pause,
+    P = player_play,
+    ['+'] = function() adjust_player_volume(5) end,
+    ['-'] = function() adjust_player_volume(-5) end,
+  }
+  if target and target.kind == 'player_song' then
+    keymap['<enter>'] = function() player_jump_to_entry(target) end
+    keymap.s = function() toggle_song_star_entry(target) end
+  end
+  return keymap
+end
+
+song_keymap = function(target)
+  local keymap = {
+    ['<enter>'] = function() play_song_entry(target) end,
+    a = function() append_song_entry(target) end,
+    s = function() toggle_song_star_entry(target) end,
+    A = function() add_song_entry_to_playlist(target) end,
+  }
+  if target and target.source == 'playlist' then
+    keymap.dd = function() remove_song_entry_from_playlist(target) end
+  end
+  return keymap
+end
+
+playlist_keymap = function(target)
+  return {
+    A = function() append_playlist_entry(target) end,
+    dd = function() delete_playlist_entry(target) end,
+    n = create_playlist_from_input,
+  }
+end
+
+search_keymap = function()
+  return {
+    s = open_search_input,
+  }
 end
 
 local function queue_section_preview(entry)
@@ -1038,98 +1217,36 @@ local function player_preview(entry)
   }
 end
 
-local function start_player_poll()
-  local function player_snapshot(player)
-    if not player then return 'nil' end
-    local parts = {
-      player.running and '1' or '0',
-      player.pause and '1' or '0',
-    }
-    for _, item in ipairs(player.playlist or {}) do
-      table.insert(parts, table.concat({
-        tostring(item.current == true or item.playing == true),
-        tostring(item.id or ''),
-        tostring(item.filename or ''),
-        tostring(item.title or ''),
-      }, '\2'))
-    end
-    return table.concat(parts, '\1')
-  end
-
-  local function tick()
-    local path = lc.api.get_current_path()
-    if path[1] == 'player' then
-      mpv.get_player_state(function(player, err)
-        if err then return end
-        local snapshot = player_snapshot(player)
-        if snapshot ~= state.player_snapshot then lc.cmd 'reload' end
-      end)
-    else
-      state.player_snapshot = nil
-    end
-    lc.defer_fn(tick, 1000)
-  end
-  lc.defer_fn(tick, 1000)
+local function schedule_player_reload()
+  if state.player_reload_pending then return end
+  state.player_reload_pending = true
+  lc.defer_fn(function()
+    state.player_reload_pending = false
+    if lc.api.get_current_path()[1] == 'player' then lc.cmd 'reload' end
+  end, 50)
 end
 
 function M.setup(opt)
   config.setup(opt)
 
+  mpv.on_player_event(function(event)
+    if not event then return end
+
+    if event.event == 'shutdown' then
+      schedule_player_reload()
+      return
+    end
+
+    if event.event ~= 'property-change' then return end
+    local name = tostring(event.name or '')
+    if name == 'pause' or name == 'playlist' or name == 'playlist-pos' or name == 'idle-active' or name == 'volume' then
+      schedule_player_reload()
+    end
+  end)
+
   lc.api.append_hook_pre_quit(function()
     local ok, err = mpv.quit_sync()
     if not ok and err then lc.log('warn', 'failed to quit mpv: {}', err) end
-  end)
-
-  lc.keymap.set('main', '<enter>', function()
-    local path = lc.api.get_current_path()
-    local hovered = lc.api.page_get_hovered()
-
-    if path[1] == 'player' and hovered and hovered.kind == 'player_song' then
-      mpv.player_jump(hovered.playlist_index, function(_, err)
-        if err then
-          show_error(err)
-          return
-        end
-        lc.cmd 'reload'
-      end)
-      return
-    end
-
-    if hovered and hovered.kind == 'song' then
-      play_from_hovered()
-      return
-    end
-
-    lc.cmd 'enter'
-  end)
-
-  lc.keymap.set('main', 'a', function() append_hovered_song() end)
-  lc.keymap.set('main', 'dd', function()
-    if delete_hovered_playlist() then return end
-    if remove_hovered_song_from_playlist() then return end
-  end)
-  lc.keymap.set('main', 'A', function()
-    if add_hovered_song_to_playlist() then return end
-    append_hovered_playlist()
-  end)
-  lc.keymap.set('main', 's', function()
-    if star_hovered_song() then return end
-
-    local path = lc.api.get_current_path()
-    if path[1] ~= 'search' then return end
-
-    lc.input {
-      prompt = 'Search music',
-      placeholder = 'keyword',
-      on_submit = function(input)
-        local query = tostring(input or ''):trim()
-        if query == '' then
-          lc.api.go_to { 'search' }
-          return
-        end
-        lc.api.go_to { 'search', query }
-      end,
-    }
   end)
 
   lc.keymap.set('main', 'R', function()
@@ -1137,72 +1254,6 @@ function M.setup(opt)
     lc.notify 'OpenSubsonic cache invalidated'
     lc.cmd 'reload'
   end)
-
-  lc.keymap.set('main', 'n', function()
-    if create_playlist_from_input() then return end
-    if lc.api.get_current_path()[1] ~= 'player' then return end
-    mpv.player_next(function(_, err)
-      if err then
-        show_error(err)
-        return
-      end
-      lc.cmd 'reload'
-    end)
-  end)
-
-  lc.keymap.set('main', 'p', function()
-    if lc.api.get_current_path()[1] ~= 'player' then return end
-    mpv.player_prev(function(_, err)
-      if err then
-        show_error(err)
-        return
-      end
-      lc.cmd 'reload'
-    end)
-  end)
-
-  lc.keymap.set('main', '<space>', function()
-    if lc.api.get_current_path()[1] ~= 'player' then return end
-    mpv.player_toggle_pause(function(_, err)
-      if err then
-        show_error(err)
-        return
-      end
-      lc.cmd 'reload'
-    end)
-  end)
-
-  lc.keymap.set('main', 'P', function()
-    if lc.api.get_current_path()[1] ~= 'player' then return end
-    mpv.player_play(function(_, err)
-      if err then
-        show_error(err)
-        return
-      end
-      lc.cmd 'reload'
-    end)
-  end)
-
-  local function adjust_player_volume(delta)
-    if lc.api.get_current_path()[1] ~= 'player' then return end
-    mpv.player_adjust_volume(delta, function(volume, err)
-      if err then
-        show_error(err)
-        return
-      end
-      if type(volume) == 'number' then
-        show_info(string.format('Volume %.0f%%', volume))
-      else
-        show_info 'Volume updated'
-      end
-      lc.cmd 'reload'
-    end)
-  end
-
-  lc.keymap.set('main', '+', function() adjust_player_volume(5) end)
-  lc.keymap.set('main', '-', function() adjust_player_volume(-5) end)
-
-  start_player_poll()
 end
 
 function M.list(path, cb)

@@ -46,15 +46,13 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 
       stream_format = 'raw',
       max_bitrate = nil,
-      -- 默认会为每个 lazycmd 实例生成独立 socket。
-      -- 只有你明确想让多个实例共享同一个 mpv 时，才手动固定这个路径。
       mpv_socket = '/tmp/lazycmd-opensubsonic-mpv.sock',
     }
   end,
 },
 ```
 
-默认情况下，插件会为当前 lazycmd 进程生成独立的 `mpv` IPC socket，避免多个实例互相影响。只有显式配置同一个 `mpv_socket` 时，多个实例才会共享同一个 `mpv`。
+插件默认使用固定的 `mpv` IPC socket，因此同一台机器上的多个 lazycmd 实例会共享同一个播放器。退出 lazycmd 时，只有“当前实例亲自拉起的 mpv”才会收到 `quit`，附着到已有播放器的实例不会误关音乐。
 
 ## 环境变量
 
@@ -67,6 +65,7 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 
 ## 键位
 
+- 大部分动作现在使用 entry 级别 keymap：只有当光标停在支持该动作的条目上时，按键才会生效
 - `Enter`
   - 普通目录：进入下一级
   - 歌曲页：从当前歌曲开始替换并播放后续队列
@@ -91,6 +90,14 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 - `+`: 在 `player` 页增大音量
 - `-`: 在 `player` 页减小音量
 - `R`: 清空插件缓存并刷新
+
+具体来说：
+
+- 歌曲条目支持 `Enter` / `a` / `s` / `A`
+- 歌单条目支持 `A` / `dd` / `n`
+- `player` 队列条目支持 `Enter` / `s` / `space` / `n` / `p` / `P` / `+` / `-`
+- 搜索相关条目支持 `s` 重新发起搜索
+- 空歌单页和空播放器页也会提供对应的 entry 级快捷键
 
 ## 说明
 
