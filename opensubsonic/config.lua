@@ -21,6 +21,21 @@ local cfg = {
     '--audio-display=no',
     '--really-quiet',
   },
+  keymap = {
+    append_to_player = 'a',
+    add_to_playlist = 'A',
+    toggle_star = 's',
+    search = 's',
+    new = 'n',
+    delete = 'dd',
+    play_now = '<enter>',
+    player_pause = '<space>',
+    player_next = 'n',
+    player_prev = 'p',
+    player_resume = 'P',
+    player_volume_up = '+',
+    player_volume_down = '-',
+  },
 }
 
 local function trim(s)
@@ -29,7 +44,7 @@ local function trim(s)
 end
 
 local function normalize(next_cfg)
-  local out = lc.tbl_extend({}, next_cfg or {})
+  local out = next_cfg
   out.url = trim(out.url)
   out.username = trim(out.username)
   out.password = trim(out.password)
@@ -38,7 +53,7 @@ local function normalize(next_cfg)
 
   if out.url and out.url ~= '' then
     local base = out.url:gsub('/+$', '')
-    out.base_url = base:match('/rest$') and base or (base .. '/rest')
+    out.base_url = base:match '/rest$' and base or (base .. '/rest')
   else
     out.base_url = nil
   end
@@ -47,11 +62,10 @@ local function normalize(next_cfg)
 end
 
 function M.setup(opt)
-  cfg = normalize(lc.tbl_extend(cfg, opt or {}))
+  local global_keymap = lc.config.get().keymap
+  cfg = normalize(lc.tbl_deep_extend('force', cfg, { keymap = global_keymap }, opt or {}))
 end
 
-function M.get()
-  return cfg
-end
+function M.get() return cfg end
 
 return M

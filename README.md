@@ -16,7 +16,7 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
 - `player` -> 当前 `mpv` 后台播放列表，与 `mpv` IPC 同步
 - `random` -> 随机歌曲列表，来自 `getRandomSongs`
 - `starred` -> 收藏歌曲列表，来自 `getStarred2`
-- `search` -> 搜索页，按 `s` 输入关键字，先显示 `artist / album / song` 三类结果分组，再进入对应列表
+- `search` -> 搜索页，按 `Enter` 或 `s` 输入关键字，先显示 `Song / Album / Artist` 三类结果分组，再进入对应列表
 - 在歌曲上按 `Enter`：把“当前歌曲到页尾”的歌曲列表替换到后台 `mpv` 播放列表并开始播放
 - 在歌曲上按 `a`：把当前歌曲追加到后台 `mpv` 播放列表
 - 在歌单列表上按 `A`：把整个歌单追加到后台 `mpv` 播放列表
@@ -43,6 +43,22 @@ OpenSubsonic 客户端插件，提供分级浏览和后台 `mpv` 播放。
       search_artist_count = 20,
       search_album_count = 20,
       search_song_count = 100,
+
+      keymap = {
+        append_to_player = 'a',
+        add_to_playlist = 'A',
+        toggle_star = 's',
+        search = 's',
+        new = 'n',
+        delete = 'd',
+        play_now = '<enter>',
+        player_pause = '<space>',
+        player_next = 'n',
+        player_prev = 'p',
+        player_resume = 'P',
+        player_volume_up = '+',
+        player_volume_down = '-',
+      },
 
       stream_format = 'raw',
       max_bitrate = nil,
