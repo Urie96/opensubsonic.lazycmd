@@ -13,16 +13,16 @@ function M.open_search_input()
     on_submit = function(input)
       local query = tostring(input or ''):trim()
       if query == '' then
-        lc.api.go_to { 'search' }
+        lc.api.go_to { 'opensubsonic', 'search' }
         return
       end
-      lc.api.go_to { 'search', query }
+      lc.api.go_to { 'opensubsonic', 'search', query }
     end,
   }
 end
 
 local function reload_if_player_visible()
-  if lc.api.get_current_path()[1] == 'player' then lc.cmd 'reload' end
+  if lc.api.get_current_path()[2] == 'player' then lc.cmd 'reload' end
 end
 
 function M.play_song_entry()
@@ -208,7 +208,7 @@ end
 
 function M.remove_song_entry_from_playlist(target)
   local path = lc.api.get_current_path()
-  if path[1] ~= 'playlist' or #path ~= 2 or not target or target.kind ~= 'song' then return false end
+  if path[2] ~= 'playlist' or #path ~= 3 or not target or target.kind ~= 'song' then return false end
 
   local entries = lc.api.page_get_entries() or {}
   local playlist_index = nil
@@ -227,7 +227,7 @@ function M.remove_song_entry_from_playlist(target)
     return true
   end
 
-  api.remove_song_from_playlist(path[2], playlist_index, function(_, err)
+  api.remove_song_from_playlist(path[3], playlist_index, function(_, err)
     if err then
       shared.show_error(err)
       return
@@ -264,7 +264,7 @@ end
 
 function M.create_playlist_from_input()
   local path = lc.api.get_current_path()
-  if path[1] ~= 'playlist' or #path ~= 1 then return false end
+  if path[2] ~= 'playlist' or #path ~= 2 then return false end
 
   lc.input {
     prompt = 'New playlist',
@@ -361,7 +361,7 @@ function M.schedule_player_reload()
   shared.state.player_reload_pending = true
   lc.defer_fn(function()
     shared.state.player_reload_pending = false
-    if lc.api.get_current_path()[1] == 'player' then lc.cmd 'reload' end
+    if lc.api.get_current_path()[2] == 'player' then lc.cmd 'reload' end
   end, 50)
 end
 

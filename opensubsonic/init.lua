@@ -3,6 +3,7 @@ local M = {}
 local api = require 'opensubsonic.api'
 local actions = require 'opensubsonic.actions'
 local config = require 'opensubsonic.config'
+local metas = require 'opensubsonic.metas'
 local root = require 'opensubsonic.root'
 local shared = require 'opensubsonic.shared'
 

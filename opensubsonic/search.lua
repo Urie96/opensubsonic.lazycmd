@@ -289,33 +289,33 @@ local function list_artist_albums(path, artist_id, cb)
 end
 
 function M.list(path, cb)
-  if #path == 1 then
+  if #path == 2 then
     list_search_root(path, cb)
     return
   end
 
-  if #path == 2 then
-    list_search_groups(path, path[2], cb)
-    return
-  end
-
   if #path == 3 then
-    list_search_items(path, path[2], path[3], cb)
+    list_search_groups(path, path[3], cb)
     return
   end
 
-  if path[3] == 'album' and #path == 4 then
-    list_album_songs(path, path[4], cb)
+  if #path == 4 then
+    list_search_items(path, path[3], path[4], cb)
     return
   end
 
-  if path[3] == 'artist' and #path == 4 then
-    list_artist_albums(path, path[4], cb)
-    return
-  end
-
-  if path[3] == 'artist' and #path == 5 then
+  if path[4] == 'album' and #path == 5 then
     list_album_songs(path, path[5], cb)
+    return
+  end
+
+  if path[4] == 'artist' and #path == 5 then
+    list_artist_albums(path, path[5], cb)
+    return
+  end
+
+  if path[4] == 'artist' and #path == 6 then
+    list_album_songs(path, path[6], cb)
     return
   end
 

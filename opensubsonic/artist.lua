@@ -122,18 +122,18 @@ local function list_album_songs(path, album_id, cb)
 end
 
 function M.list(path, cb)
-  if #path == 1 then
+  if #path == 2 then
     list_artists(path, cb)
     return
   end
 
-  if #path == 2 then
-    list_artist_albums(path, path[2], cb)
+  if #path == 3 then
+    list_artist_albums(path, path[3], cb)
     return
   end
 
-  if #path == 3 then
-    list_album_songs(path, path[3], cb)
+  if #path == 4 then
+    list_album_songs(path, path[4], cb)
     return
   end
 

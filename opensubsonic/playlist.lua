@@ -104,13 +104,13 @@ local function list_playlist_songs(playlist_id, cb)
 end
 
 function M.list(path, cb)
-  if #path == 1 then
+  if #path == 2 then
     list_playlists(path, cb)
     return
   end
 
-  if #path == 2 then
-    list_playlist_songs(path[2], cb)
+  if #path == 3 then
+    list_playlist_songs(path[3], cb)
     return
   end
 

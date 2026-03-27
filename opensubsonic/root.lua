@@ -69,10 +69,13 @@ local sections = {
 }
 
 function M.list(path, cb)
-  if #path == 0 then cb(sections) end
+  if #path == 1 then
+    cb(sections)
+    return
+  end
 
   for _, section in ipairs(sections) do
-    if section.key == path[1] then
+    if section.key == path[2] then
       section.list(path, function(entries, list_err)
         if list_err then
           shared.show_error(list_err)
