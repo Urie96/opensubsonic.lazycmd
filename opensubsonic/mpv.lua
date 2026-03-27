@@ -3,7 +3,7 @@ local config = require 'opensubsonic.config'
 
 local state = {
   mpv_starting = false,
-  mpv_owned = false,
+  mpv_pid = nil,
   mpv_waiters = {},
   queue_meta = {},
   sock = nil,
@@ -26,7 +26,7 @@ local function finish_waiters(ok, err)
   local waiters = state.mpv_waiters
   state.mpv_waiters = {}
   state.mpv_starting = false
-  if not ok then state.mpv_owned = false end
+  if not ok then state.mpv_pid = nil end
   for _, waiter in ipairs(waiters) do
     waiter(ok, err)
   end
@@ -100,11 +100,11 @@ local function ensure_player_observers()
   if state.player_observing then return end
   state.player_observing = true
 
-  socket_send({ command = { 'observe_property', 1, 'pause' } })
-  socket_send({ command = { 'observe_property', 2, 'playlist' } })
-  socket_send({ command = { 'observe_property', 3, 'playlist-pos' } })
-  socket_send({ command = { 'observe_property', 4, 'idle-active' } })
-  socket_send({ command = { 'observe_property', 5, 'volume' } })
+  socket_send { command = { 'observe_property', 1, 'pause' } }
+  socket_send { command = { 'observe_property', 2, 'playlist' } }
+  socket_send { command = { 'observe_property', 3, 'playlist-pos' } }
+  socket_send { command = { 'observe_property', 4, 'idle-active' } }
+  socket_send { command = { 'observe_property', 5, 'volume' } }
 end
 
 socket_send = function(payload, cb)
@@ -162,9 +162,7 @@ local function mpv_request_no_spawn(command, cb)
   end)
 end
 
-function M.on_player_event(cb)
-  state.player_event_cb = cb
-end
+function M.on_player_event(cb) state.player_event_cb = cb end
 
 local function probe_mpv(cb)
   mpv_request_no_spawn({ 'get_property', 'pause' }, function(response, err)
@@ -203,7 +201,7 @@ local function ensure_mpv(cb)
 
   probe_mpv(function(ok)
     if ok then
-      state.mpv_owned = false
+      state.mpv_pid = nil
       cb(true)
       return
     end
@@ -221,8 +219,9 @@ local function ensure_mpv(cb)
       table.insert(cmd, arg)
     end
     table.insert(cmd, '--input-ipc-server=' .. cfg.mpv_socket)
-    lc.system.spawn(cmd)
-    state.mpv_owned = true
+    local pid = lc.system.spawn(cmd)
+    lc.notify(tostring(pid))
+    state.mpv_pid = pid ~= 0 and pid or nil
     wait_for_socket(1)
   end)
 end
@@ -291,9 +290,7 @@ end
 
 function M.set_song_starred(song_id, starred)
   for _, meta in pairs(state.queue_meta) do
-    if tostring(meta.id) == tostring(song_id) then
-      meta.starred = starred and lc.time.format(lc.time.now()) or nil
-    end
+    if tostring(meta.id) == tostring(song_id) then meta.starred = starred and lc.time.format(lc.time.now()) or nil end
   end
 end
 
@@ -336,50 +333,14 @@ function M.player_jump(index, cb)
   end)
 end
 
-function M.quit(cb)
-  if not state.mpv_owned then
-    if cb then cb(true) end
-    return
-  end
-
-  if not socket_exists() then
-    if cb then cb(true) end
-    return
-  end
-
-  mpv_request_no_spawn({ 'quit' }, function(_, err)
-    if err and err ~= 'mpv not running' then
-      if cb then cb(nil, err) end
-      return
-    end
-
-    state.mpv_owned = false
-    close_socket 'mpv socket closed'
-    if cb then cb(true) end
-  end)
-end
-
 function M.quit_sync()
-  if not state.mpv_owned then return true end
-  if not socket_exists() then return true end
-  local sock
-  local ok, result = pcall(ensure_socket)
-  if ok then
-    sock = result
-  else
-    close_socket(result)
-    return nil, tostring(result)
+  if not state.mpv_pid then return true end
+  if state.mpv_pid then
+    local ok, err = pcall(lc.system.kill, state.mpv_pid)
+    if not ok then return nil, tostring(err) end
   end
 
-  local write_ok, write_err = pcall(function()
-    sock:write(lc.json.encode { command = { 'quit' } })
-  end)
-  if not write_ok then
-    close_socket(write_err)
-    return nil, tostring(write_err)
-  end
-
-  state.mpv_owned = false
+  state.mpv_pid = nil
   close_socket 'mpv socket closed'
   return true
 end
