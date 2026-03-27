@@ -21,10 +21,10 @@ local function attach_song_meta(entries)
   local mt = {}
   mt.__index = mt
   mt.keymap = {
-    [keymap.play_now] = actions.play_song_entry,
-    [keymap.append_to_player] = actions.append_song_entry,
-    [keymap.toggle_star] = actions.toggle_song_star_entry,
-    [keymap.add_to_playlist] = actions.add_song_entry_to_playlist,
+    [keymap.play_now] = { callback = actions.play_song_entry, desc = 'play now' },
+    [keymap.append_to_player] = { callback = actions.append_song_entry, desc = 'append to player' },
+    [keymap.toggle_star] = { callback = actions.toggle_song_star_entry, desc = 'toggle star' },
+    [keymap.add_to_playlist] = { callback = actions.add_song_entry_to_playlist, desc = 'add to playlist' },
   }
   mt.preview = shared.song_preview
 

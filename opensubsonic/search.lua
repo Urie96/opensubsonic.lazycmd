@@ -45,7 +45,7 @@ local function attach_search_group_meta(entries)
   local mt = {}
   mt.__index = mt
   mt.keymap = {
-    [keymap.toggle_star] = actions.open_search_input,
+    [keymap.toggle_star] = { callback = actions.open_search_input, desc = 'search again' },
   }
   mt.preview = search_group_preview
 
@@ -61,7 +61,7 @@ local function attach_search_artist_meta(entries)
   mt.__index = function(_, key)
     if key == 'preview' then return shared.artist_preview end
     if key == 'keymap' then return {
-      [keymap.toggle_star] = actions.open_search_input,
+      [keymap.toggle_star] = { callback = actions.open_search_input, desc = 'search again' },
     } end
   end
 
@@ -77,7 +77,7 @@ local function attach_search_album_meta(entries)
   mt.__index = function(_, key)
     if key == 'preview' then return shared.album_preview end
     if key == 'keymap' then return {
-      [keymap.toggle_star] = actions.open_search_input,
+      [keymap.toggle_star] = { callback = actions.open_search_input, desc = 'search again' },
     } end
   end
 
@@ -92,11 +92,11 @@ local function attach_search_song_meta(entries)
   local mt = {}
   mt.__index = mt
   mt.keymap = {
-    [keymap.play_now] = actions.play_song_entry,
-    [keymap.append_to_player] = actions.append_song_entry,
-    [keymap.toggle_star] = actions.toggle_song_star_entry,
-    [keymap.add_to_playlist] = actions.add_song_entry_to_playlist,
-    [keymap.delete] = actions.remove_song_entry_from_playlist,
+    [keymap.play_now] = { callback = actions.play_song_entry, desc = 'play now' },
+    [keymap.append_to_player] = { callback = actions.append_song_entry, desc = 'append to player' },
+    [keymap.toggle_star] = { callback = actions.toggle_song_star_entry, desc = 'toggle star' },
+    [keymap.add_to_playlist] = { callback = actions.add_song_entry_to_playlist, desc = 'add to playlist' },
+    [keymap.delete] = { callback = actions.remove_song_entry_from_playlist, desc = 'remove from playlist' },
   }
   mt.preview = shared.song_preview
 
@@ -121,11 +121,11 @@ local function list_search_root(path, cb)
 
   local entries = {
     {
-      key = 'prompt',
-      kind = 'info',
-      keymap = {
-        [keymap.search] = actions.open_search_input,
-      },
+          key = 'prompt',
+          kind = 'info',
+          keymap = {
+        [keymap.search] = { callback = actions.open_search_input, desc = 'search' },
+          },
       preview = search_root_preview,
       display = shared.titlec(('Press %s to search music'):format(keymap.search)),
     },
@@ -226,7 +226,7 @@ local function list_search_items(path, query, search_kind, cb)
           key = 'empty',
           kind = 'info',
           keymap = {
-            [keymap.toggle_star] = actions.open_search_input,
+            [keymap.toggle_star] = { callback = actions.open_search_input, desc = 'search again' },
           },
           preview = search_groups_preview,
           query = query,

@@ -26,14 +26,14 @@ end
 local function player_keymap()
   local keymap = cfg.get().keymap
   return {
-    [keymap.play_now] = actions.player_jump_to_entry,
-    [keymap.toggle_star] = actions.toggle_song_star_entry,
-    [keymap.player_pause] = actions.player_toggle_pause,
-    [keymap.player_next] = actions.player_next,
-    [keymap.player_prev] = actions.player_prev,
-    [keymap.player_resume] = actions.player_play,
-    [keymap.player_volume_up] = function() actions.adjust_player_volume(5) end,
-    [keymap.player_volume_down] = function() actions.adjust_player_volume(-5) end,
+    [keymap.play_now] = { callback = actions.player_jump_to_entry, desc = 'jump to this song' },
+    [keymap.toggle_star] = { callback = actions.toggle_song_star_entry, desc = 'toggle star' },
+    [keymap.player_pause] = { callback = actions.player_toggle_pause, desc = 'pause or resume player' },
+    [keymap.player_next] = { callback = actions.player_next, desc = 'next song' },
+    [keymap.player_prev] = { callback = actions.player_prev, desc = 'previous song' },
+    [keymap.player_resume] = { callback = actions.player_play, desc = 'resume player' },
+    [keymap.player_volume_up] = { callback = function() actions.adjust_player_volume(5) end, desc = 'volume up' },
+    [keymap.player_volume_down] = { callback = function() actions.adjust_player_volume(-5) end, desc = 'volume down' },
   }
 end
 

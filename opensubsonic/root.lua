@@ -54,8 +54,8 @@ local sections = {
     title = 'Search',
     display = lc.style.line { shared.titlec '󰍉', shared.dim '  ', shared.titlec 'Search' },
     keymap = {
-      [cfg.get().keymap.play_now] = actions.open_search_input,
-      [cfg.get().keymap.search] = actions.open_search_input,
+      [cfg.get().keymap.play_now] = { callback = actions.open_search_input, desc = 'search' },
+      [cfg.get().keymap.search] = { callback = actions.open_search_input, desc = 'search' },
     },
     preview = function(_, cb)
       cb(shared.preview_lines {

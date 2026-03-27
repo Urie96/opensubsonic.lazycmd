@@ -11,9 +11,9 @@ local function attach_playlist_meta(entries)
   local mt = {}
   mt.__index = mt
   mt.keymap = {
-    [keymap.append_to_player] = actions.append_playlist_entry,
-    [keymap.delete] = actions.delete_playlist_entry,
-    [keymap.new] = actions.create_playlist_from_input,
+    [keymap.append_to_player] = { callback = actions.append_playlist_entry, desc = 'append playlist to player' },
+    [keymap.delete] = { callback = actions.delete_playlist_entry, desc = 'delete playlist' },
+    [keymap.new] = { callback = actions.create_playlist_from_input, desc = 'new playlist' },
   }
   mt.preview = shared.playlist_preview
 
@@ -49,7 +49,7 @@ local function list_playlists(path, cb)
           key = 'empty',
           kind = 'info',
           keymap = {
-            [keymap.new] = actions.create_playlist_from_input,
+            [keymap.new] = { callback = actions.create_playlist_from_input, desc = 'new playlist' },
           },
           display = lc.style.line { shared.dim 'No playlists yet.' },
         },
@@ -66,11 +66,11 @@ local function attach_playlist_song_meta(entries)
   local mt = {}
   mt.__index = mt
   mt.keymap = {
-    [keymap.play_now] = actions.play_song_entry,
-    [keymap.append_to_player] = actions.append_song_entry,
-    [keymap.toggle_star] = actions.toggle_song_star_entry,
-    [keymap.add_to_playlist] = actions.add_song_entry_to_playlist,
-    [keymap.delete] = actions.remove_song_entry_from_playlist,
+    [keymap.play_now] = { callback = actions.play_song_entry, desc = 'play now' },
+    [keymap.append_to_player] = { callback = actions.append_song_entry, desc = 'append to player' },
+    [keymap.toggle_star] = { callback = actions.toggle_song_star_entry, desc = 'toggle star' },
+    [keymap.add_to_playlist] = { callback = actions.add_song_entry_to_playlist, desc = 'add to playlist' },
+    [keymap.delete] = { callback = actions.remove_song_entry_from_playlist, desc = 'remove from playlist' },
   }
   mt.preview = shared.song_preview
 
