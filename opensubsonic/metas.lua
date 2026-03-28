@@ -47,13 +47,6 @@ local song_mt = {
   end,
 }
 
-local player_song_mt = {
-  __index = function(_, key)
-    if key == 'preview' then return preview_method(shared.player_preview) end
-    if key == 'keymap' then return actions.player_keymap end
-  end,
-}
-
 local search_group_mt = {
   __index = function(_, key)
     if key == 'preview' then return preview_method(shared.search_group_preview) end
@@ -66,7 +59,6 @@ local info_mt = {
     if key == 'preview' then return preview_method(shared.info_preview) end
     if key == 'keymap' then
       if self.info_keymap == 'playlist' then return actions.playlist_keymap end
-      if self.info_keymap == 'player' then return actions.player_keymap end
       if self.info_keymap == 'search' then return actions.search_keymap end
     end
   end,
@@ -78,7 +70,6 @@ local metatables = {
   artist = artist_mt,
   album = album_mt,
   song = song_mt,
-  player_song = player_song_mt,
   search_group = search_group_mt,
   info = info_mt,
 }

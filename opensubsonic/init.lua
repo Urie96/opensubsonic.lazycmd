@@ -24,6 +24,8 @@ end
 
 function M.setup(opt)
   config.setup(opt)
+  local _, setup_err = lc.plugin.load 'mpv'
+  if setup_err then lc.log('warn', 'failed to setup mpv plugin from opensubsonic: {}', tostring(setup_err)) end
   actions.setup()
 end
 

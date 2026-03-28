@@ -28,13 +28,6 @@ local sections = {
     list = function(...) require('opensubsonic.album').list(...) end,
   },
   {
-    key = 'player',
-    kind = 'section',
-    title = 'Player Queue',
-    display = lc.style.line { shared.okc '󰐊', shared.dim '  ', shared.okc 'Player' },
-    list = function(...) require('opensubsonic.player').list(...) end,
-  },
-  {
     key = 'random',
     kind = 'section',
     title = 'Random Songs',

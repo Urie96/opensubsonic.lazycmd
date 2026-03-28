@@ -13,14 +13,6 @@ local cfg = {
   search_song_count = 100,
   stream_format = 'raw',
   max_bitrate = nil,
-  mpv_socket = '/tmp/lazycmd-opensubsonic-mpv.sock',
-  mpv_args = {
-    '--idle=yes',
-    '--no-video',
-    '--force-window=no',
-    '--audio-display=no',
-    '--really-quiet',
-  },
   keymap = {
     append_to_player = 'a',
     add_to_playlist = 'A',
@@ -29,12 +21,6 @@ local cfg = {
     new = 'n',
     delete = 'dd',
     play_now = '<enter>',
-    player_pause = '<space>',
-    player_next = 'n',
-    player_prev = 'p',
-    player_resume = 'P',
-    player_volume_up = '+',
-    player_volume_down = '-',
   },
 }
 
@@ -49,7 +35,6 @@ local function normalize(next_cfg)
   out.username = trim(out.username)
   out.password = trim(out.password)
   out.api_key = trim(out.api_key)
-  out.mpv_socket = trim(out.mpv_socket) or cfg.mpv_socket
 
   if out.url and out.url ~= '' then
     local base = out.url:gsub('/+$', '')

@@ -1,10 +1,71 @@
 local M = {}
 
 local api = require 'opensubsonic.api'
-local mpv = require 'opensubsonic.mpv'
 local shared = require 'opensubsonic.shared'
+local cfg = require 'opensubsonic.config'
 
 local function hovered_entry() return lc.api.page_get_hovered() end
+
+local function get_mpv()
+  local ok, mod = pcall(require, 'mpv')
+  if ok and mod then return mod end
+  shared.show_error('mpv plugin is required: add { dir = "plugins/mpv.lazycmd" } to lc.config.plugins')
+  return nil
+end
+
+local function reload_if_player_visible()
+  local path = lc.api.get_current_path() or {}
+  if path[1] == 'mpv' then lc.cmd 'reload' end
+end
+
+local function mpv_preview(entry)
+  local item = entry.player_item or {}
+  local meta = entry.mpv_meta or {}
+  local player = entry.player or {}
+
+  return shared.preview_lines {
+    lc.style.line { shared.okc 'mpv queue' },
+    '',
+    shared.kv_line('State', player.pause and 'paused' or 'playing', player.pause and 'mag' or 'accent'),
+    shared.kv_line('Current', tostring(item.current == true or item.playing == true), 'accent'),
+    shared.kv_line('Title', meta.title or item.title or item.filename or '-'),
+    shared.kv_line('Artist', meta.artist or '-'),
+    shared.kv_line('Album', meta.album or '-'),
+    shared.kv_line('Starred', tostring(meta.starred ~= nil and meta.starred ~= ''), 'accent'),
+    shared.kv_line('Duration', shared.format_duration(meta.duration)),
+  }
+end
+
+local function build_mpv_track(song)
+  local keymap = cfg.get().keymap
+  return {
+    key = tostring(song.id),
+    id = song.id,
+    url = api.stream_url(song.id),
+    title = song.title or song.name or song.id,
+    artist = song.artist or song.displayArtist or 'Unknown artist',
+    album = song.album or '',
+    duration = song.duration,
+    starred = song.starred,
+    source = 'opensubsonic',
+    display = function(item, player, meta)
+      item._meta = meta
+      item._player = player
+      return shared.format_player_entry(item)
+    end,
+    preview = function(entry, cb)
+      local preview = mpv_preview(entry)
+      if cb then
+        cb(preview)
+        return
+      end
+      return preview
+    end,
+    keymap = {
+      [keymap.toggle_star] = { callback = M.toggle_song_star_entry, desc = 'toggle star' },
+    },
+  }
+end
 
 function M.open_search_input()
   lc.input {
@@ -21,16 +82,15 @@ function M.open_search_input()
   }
 end
 
-local function reload_if_player_visible()
-  if lc.api.get_current_path()[2] == 'player' then lc.cmd 'reload' end
-end
-
 function M.play_song_entry()
   local target = hovered_entry()
   if not target or target.kind ~= 'song' or not target.song then
     lc.cmd 'enter'
     return
   end
+
+  local mpv = get_mpv()
+  if not mpv then return false end
 
   local _, entries = shared.current_song_entries()
   local start = 1
@@ -44,81 +104,90 @@ function M.play_song_entry()
   local queue = {}
   for index = start, #entries do
     local entry = entries[index]
-    if entry and entry.kind == 'song' and entry.song then table.insert(queue, entry.song) end
-  end
-
-  for _, song in ipairs(queue) do
-    mpv.remember_song(song, api.stream_url)
-  end
-
-  mpv.play_tracks(queue, api.stream_url, function(_, err)
-    if err then
-      shared.show_error(err)
-      return
+    if entry and entry.kind == 'song' and entry.song then
+      table.insert(queue, build_mpv_track(entry.song))
     end
-    shared.show_info 'Sent tracks to mpv queue'
-    reload_if_player_visible()
-  end)
+  end
+
+  mpv.play_tracks(queue)
+    :next(function()
+      shared.show_info 'Sent tracks to mpv queue'
+      reload_if_player_visible()
+    end)
+    :catch(function(err)
+      shared.show_error(err)
+    end)
 end
 
 function M.append_song_entry()
   local target = hovered_entry()
-  if not target or target.kind ~= 'song' or not target.song then return end
-  mpv.remember_song(target.song, api.stream_url)
-  mpv.append_tracks({ target.song }, api.stream_url, function(_, err)
-    if err then
+  if not target or target.kind ~= 'song' or not target.song then return false end
+
+  local mpv = get_mpv()
+  if not mpv then return false end
+
+  mpv.append_tracks({ build_mpv_track(target.song) })
+    :next(function()
+      shared.show_info 'Song appended to mpv queue'
+      reload_if_player_visible()
+    end)
+    :catch(function(err)
       shared.show_error(err)
-      return
-    end
-    shared.show_info 'Song appended to mpv queue'
-    reload_if_player_visible()
-  end)
+    end)
+
+  return true
 end
 
 function M.append_playlist_entry()
   local target = lc.api.page_get_hovered()
-  if not target or target.kind ~= 'playlist' or not target.playlist or not target.playlist.id then return end
+  if not target or target.kind ~= 'playlist' or not target.playlist or not target.playlist.id then return false end
+
+  local mpv = get_mpv()
+  if not mpv then return false end
+
   api.list_playlist_songs(target.playlist.id, function(playlist, err)
     if err then
       shared.show_error(err)
       return
     end
 
-    local tracks = playlist.entry or {}
-    for _, song in ipairs(tracks) do
-      mpv.remember_song(song, api.stream_url)
+    local tracks = {}
+    for _, song in ipairs(playlist.entry or {}) do
+      table.insert(tracks, build_mpv_track(song))
     end
 
-    mpv.append_tracks(tracks, api.stream_url, function(_, append_err)
-      if append_err then
+    mpv.append_tracks(tracks)
+      :next(function()
+        shared.show_info 'Playlist appended to mpv queue'
+        reload_if_player_visible()
+      end)
+      :catch(function(append_err)
         shared.show_error(append_err)
-        return
-      end
-      shared.show_info 'Playlist appended to mpv queue'
-      reload_if_player_visible()
-    end)
+      end)
   end)
+
+  return true
 end
 
 function M.set_song_starred_local(song_id, starred)
   local entries = lc.api.page_get_entries() or {}
-  mpv.set_song_starred(song_id, starred)
+  local stamped = starred and lc.time.format(lc.time.now()) or nil
+  local mpv = get_mpv()
+  if mpv then mpv.update_track_fields(song_id, { starred = stamped }) end
+
   for _, entry in ipairs(entries) do
     if entry.kind == 'song' and entry.song and tostring(entry.song.id) == tostring(song_id) then
-      entry.song.starred = starred and lc.time.format(lc.time.now()) or nil
+      entry.song.starred = stamped
       entry.display = shared.format_song_display(entry.song)
-    elseif entry.kind == 'player_song' then
+    elseif entry.mpv_meta and tostring(entry.mpv_meta.id) == tostring(song_id) then
+      entry.mpv_meta.starred = stamped
       local item = entry.player_item or {}
-      local meta = item._meta or {}
-      local item_id = meta.id or item.id
-      if tostring(item_id) == tostring(song_id) then
-        meta.starred = starred and lc.time.format(lc.time.now()) or nil
-        item._meta = meta
-        entry.player_item = item
-        entry.display = shared.format_player_entry(item)
-      end
+      item._meta = entry.mpv_meta
+      entry.player_item = item
+      if type(entry.display) ~= 'function' then entry.display = shared.format_player_entry(item) end
     end
   end
+
   lc.api.page_set_entries(entries)
   shared.refresh_current_page_entries()
 end
@@ -130,14 +199,11 @@ function M.toggle_song_star_entry()
   local song = nil
   if target.kind == 'song' and target.song then
     song = target.song
-  elseif target.kind == 'player_song' then
-    local item = target.player_item or {}
-    local meta = item._meta or {}
-    local song_id = meta.id or item.id
-    if song_id then song = {
-      id = song_id,
-      starred = meta.starred,
-    } end
+  elseif target.mpv_meta and target.mpv_meta.id then
+    song = {
+      id = target.mpv_meta.id,
+      starred = target.mpv_meta.starred,
+    }
   end
 
   if not song or not song.id then return false end
@@ -287,104 +353,6 @@ function M.create_playlist_from_input()
   return true
 end
 
-function M.player_jump_to_entry(target)
-  if not target or target.kind ~= 'player_song' then
-    lc.cmd 'enter'
-    return
-  end
-
-  mpv.player_jump(target.playlist_index, function(_, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    lc.cmd 'reload'
-  end)
-end
-
-function M.player_next()
-  mpv.player_next(function(_, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    lc.cmd 'reload'
-  end)
-end
-
-function M.player_prev()
-  mpv.player_prev(function(_, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    lc.cmd 'reload'
-  end)
-end
-
-function M.player_toggle_pause()
-  mpv.player_toggle_pause(function(_, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    lc.cmd 'reload'
-  end)
-end
-
-function M.player_play()
-  mpv.player_play(function(_, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    lc.cmd 'reload'
-  end)
-end
-
-function M.adjust_player_volume(delta)
-  mpv.player_adjust_volume(delta, function(volume, err)
-    if err then
-      shared.show_error(err)
-      return
-    end
-    if type(volume) == 'number' then
-      shared.show_info(string.format('Volume %.0f%%', volume))
-    else
-      shared.show_info 'Volume updated'
-    end
-  end)
-end
-
-function M.schedule_player_reload()
-  if shared.state.player_reload_pending then return end
-  shared.state.player_reload_pending = true
-  lc.defer_fn(function()
-    shared.state.player_reload_pending = false
-    if lc.api.get_current_path()[2] == 'player' then lc.cmd 'reload' end
-  end, 50)
-end
-
-function M.setup()
-  mpv.on_player_event(function(event)
-    if not event then return end
-
-    if event.event == 'shutdown' then
-      M.schedule_player_reload()
-      return
-    end
-
-    if event.event ~= 'property-change' then return end
-    local name = tostring(event.name or '')
-    if name == 'pause' or name == 'playlist' or name == 'playlist-pos' or name == 'idle-active' or name == 'volume' then
-      M.schedule_player_reload()
-    end
-  end)
-
-  lc.api.append_hook_pre_quit(function()
-    local ok, err = mpv.quit_sync()
-    if not ok and err then lc.log('warn', 'failed to quit mpv: {}', err) end
-  end)
-end
+function M.setup() end
 
 return M
