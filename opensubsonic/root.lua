@@ -38,7 +38,7 @@ local sections = {
     key = 'starred',
     kind = 'section',
     title = 'Starred Songs',
-    display = lc.style.line { shared.accent '', shared.dim '  ', shared.accent 'Starred' },
+    display = lc.style.line { shared.liked_icon(), shared.accent 'Starred' },
     list = function(...) require('opensubsonic.starred').list(...) end,
   },
   {

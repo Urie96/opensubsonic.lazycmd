@@ -35,6 +35,7 @@ function M.warm(s) return lc.style.span(tostring(s or '')):fg 'yellow' end
 function M.okc(s) return lc.style.span(tostring(s or '')):fg 'green' end
 function M.mag(s) return lc.style.span(tostring(s or '')):fg 'magenta' end
 function M.titlec(s) return lc.style.span(tostring(s or '')):fg 'white' end
+function M.liked_icon() return lc.style.span(' '):fg 'red' end
 
 local function aligned_line(line) return { line = line, align = true } end
 
@@ -101,8 +102,7 @@ function M.format_song_display(song)
   local artist = song.artist or song.displayArtist or 'Unknown artist'
   local starred = song.starred ~= nil and song.starred ~= ''
   return lc.style.line {
-    starred and M.warm '★' or M.dim ' ',
-    M.dim ' ',
+    starred and M.liked_icon() or M.dim '  ',
     M.titlec(title),
     M.dim '  [',
     M.accent(artist),
@@ -154,8 +154,7 @@ function M.format_player_entry(item)
 
   return lc.style.line {
     marker,
-    starred and M.warm '★' or M.dim ' ',
-    M.dim ' ',
+    starred and M.liked_icon() or M.dim '  ',
     M.titlec(title),
     artist ~= '' and M.dim '  [' or '',
     artist ~= '' and M.accent(artist) or '',
