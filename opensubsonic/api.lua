@@ -8,12 +8,6 @@ local state = {
   config_key = nil,
 }
 
-local function urlencode(value)
-  return tostring(value)
-    :gsub('\n', '\r\n')
-    :gsub('([^%w%-_%.~])', function(char) return string.format('%%%02X', string.byte(char)) end)
-end
-
 local function to_hex(s)
   return (tostring(s):gsub('.', function(char) return string.format('%02x', string.byte(char)) end))
 end
@@ -21,7 +15,7 @@ end
 local function encode_query(params)
   local chunks = {}
   for key, value in pairs(params or {}) do
-    if value ~= nil and value ~= '' then table.insert(chunks, urlencode(key) .. '=' .. urlencode(value)) end
+    if value ~= nil and value ~= '' then table.insert(chunks, lc.url.encode(key) .. '=' .. lc.url.encode(value)) end
   end
   table.sort(chunks)
   return table.concat(chunks, '&')
