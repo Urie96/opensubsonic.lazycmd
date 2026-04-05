@@ -4,7 +4,7 @@ local api = require 'opensubsonic.api'
 local shared = require 'opensubsonic.shared'
 local cfg = require 'opensubsonic.config'
 
-local function hovered_entry() return lc.api.page_get_hovered() end
+local function hovered_entry() return lc.api.get_hovered() end
 
 local function get_mpv()
   local ok, mod = pcall(require, 'mpv')
@@ -139,7 +139,7 @@ function M.append_song_entry()
 end
 
 function M.append_playlist_entry()
-  local target = lc.api.page_get_hovered()
+  local target = lc.api.get_hovered()
   if not target or target.kind ~= 'playlist' or not target.playlist or not target.playlist.id then return false end
 
   local mpv = get_mpv()
@@ -170,7 +170,7 @@ function M.append_playlist_entry()
 end
 
 function M.set_song_starred_local(song_id, starred)
-  local entries = lc.api.page_get_entries() or {}
+  local entries = lc.api.get_entries() or {}
   local stamped = starred and lc.time.format(lc.time.now()) or nil
   local mpv = get_mpv()
   if mpv then mpv.update_track_fields(song_id, { starred = stamped }) end
@@ -188,7 +188,7 @@ function M.set_song_starred_local(song_id, starred)
     end
   end
 
-  lc.api.page_set_entries(entries)
+  lc.api.set_entries(nil, entries)
   shared.refresh_current_page_entries()
 end
 
@@ -276,7 +276,7 @@ function M.remove_song_entry_from_playlist(target)
   local path = lc.api.get_current_path()
   if path[2] ~= 'playlist' or #path ~= 3 or not target or target.kind ~= 'song' then return false end
 
-  local entries = lc.api.page_get_entries() or {}
+  local entries = lc.api.get_entries() or {}
   local playlist_index = nil
   local song_count = 0
   for _, entry in ipairs(entries) do
@@ -306,7 +306,7 @@ function M.remove_song_entry_from_playlist(target)
 end
 
 function M.delete_playlist_entry()
-  local target = lc.api.page_get_hovered()
+  local target = lc.api.get_hovered()
   if not target or target.kind ~= 'playlist' or not target.playlist then return false end
 
   local playlist = target.playlist or {}

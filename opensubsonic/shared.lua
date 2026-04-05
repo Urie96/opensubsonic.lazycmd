@@ -7,7 +7,7 @@ M.state = {
 function M.join_path(path) return table.concat(path or {}, '/') end
 
 function M.current_song_entries()
-  local entries = lc.api.page_get_entries() or {}
+  local entries = lc.api.get_entries() or {}
   local songs = {}
   for _, entry in ipairs(entries) do
     if entry.kind == 'song' and entry.song then table.insert(songs, entry.song) end
@@ -218,11 +218,12 @@ function M.song_preview(entry)
 end
 
 function M.refresh_current_page_entries()
-  local entries = lc.api.page_get_entries() or {}
-  lc.api.page_set_entries(entries)
-  local hovered = lc.api.page_get_hovered()
+  local entries = lc.api.get_entries() or {}
+  lc.api.set_entries(nil, entries)
+  local hovered = lc.api.get_hovered()
   if hovered and type(hovered.preview) == 'function' then
-    hovered:preview(function(preview) lc.api.page_set_preview(preview) end)
+    local hovered_path = lc.api.get_hovered_path()
+    hovered:preview(function(preview) lc.api.set_preview(hovered_path, preview) end)
   end
 end
 
