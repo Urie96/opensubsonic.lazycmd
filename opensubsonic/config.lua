@@ -13,15 +13,6 @@ local cfg = {
   search_song_count = 100,
   stream_format = 'raw',
   max_bitrate = nil,
-  keymap = {
-    append_to_player = 'a',
-    add_to_playlist = 'A',
-    toggle_star = 'l',
-    search = 's',
-    new = 'n',
-    delete = 'dd',
-    play_now = '<enter>',
-  },
 }
 
 local function trim(s)
@@ -47,8 +38,7 @@ local function normalize(next_cfg)
 end
 
 function M.setup(opt)
-  local global_keymap = lc.config.get().keymap
-  cfg = normalize(lc.tbl_deep_extend('force', cfg, { keymap = global_keymap }, opt or {}))
+  cfg = normalize(deck.tbl_deep_extend('force', cfg, opt or {}))
 end
 
 function M.get() return cfg end

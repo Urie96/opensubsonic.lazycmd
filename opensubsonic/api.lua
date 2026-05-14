@@ -15,7 +15,7 @@ end
 local function encode_query(params)
   local chunks = {}
   for key, value in pairs(params or {}) do
-    if value ~= nil and value ~= '' then table.insert(chunks, lc.url.encode(key) .. '=' .. lc.url.encode(value)) end
+    if value ~= nil and value ~= '' then table.insert(chunks, deck.url.encode(key) .. '=' .. deck.url.encode(value)) end
   end
   table.sort(chunks)
   return table.concat(chunks, '&')
@@ -60,7 +60,7 @@ local function auth_query()
   local cfg = ensure_cache_state()
   local params = {
     v = '1.16.1',
-    c = 'lazycmd-opensubsonic',
+    c = 'lazydeck-opensubsonic',
     f = 'json',
   }
 
@@ -96,14 +96,14 @@ local function request_json(endpoint, params, cb)
   end
 
   local cfg = ensure_cache_state()
-  local url = cfg.base_url .. endpoint .. '?' .. encode_query(lc.tbl_extend('force', {}, auth_query(), params or {}))
-  lc.http.get(url, function(response)
+  local url = cfg.base_url .. endpoint .. '?' .. encode_query(deck.tbl_extend('force', {}, auth_query(), params or {}))
+  deck.http.get(url, function(response)
     if not response.success then
       cb(nil, response.error or ('HTTP ' .. tostring(response.status)))
       return
     end
 
-    local decode_ok, decoded = pcall(lc.json.decode, response.body or '')
+    local decode_ok, decoded = pcall(deck.json.decode, response.body or '')
     if not decode_ok then
       cb(nil, 'failed to decode OpenSubsonic response')
       return

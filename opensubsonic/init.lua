@@ -1,43 +1,59 @@
 local M = {}
 
 local api = require 'opensubsonic.api'
-local actions = require 'opensubsonic.actions'
 local config = require 'opensubsonic.config'
-local metas = require 'opensubsonic.metas'
-local root = require 'opensubsonic.root'
-local shared = require 'opensubsonic.shared'
+local provider = require 'opensubsonic.provider'
+
+local browser = nil
 
 local function config_entries(err)
-  return metas.attach_all {
+  return {
     {
       key = 'configure',
       kind = 'info',
-      display = lc.style.line { lc.style.span('Configure OpenSubsonic via setup() or env vars'):fg 'yellow' },
+      display = deck.style.line { deck.style.span('Configure OpenSubsonic via setup() or env vars'):fg 'yellow' },
     },
     {
       key = 'hint',
       kind = 'info',
-      display = lc.style.line { lc.style.span(tostring(err)):fg 'yellow' },
+      display = deck.style.line { deck.style.span(tostring(err)):fg 'yellow' },
     },
   }
 end
 
+local function ensure_browser()
+  if browser then return browser end
+
+  local ok, music_or_err = deck.plugin.load 'music'
+  if not ok then error('failed to load music plugin: ' .. tostring(music_or_err)) end
+
+  browser = ok.new(provider, {
+    root = 'opensubsonic',
+  })
+  return browser
+end
+
 function M.setup(opt)
   config.setup(opt)
-  local _, setup_err = lc.plugin.load 'mpv'
-  if setup_err then lc.log('warn', 'failed to setup mpv plugin from opensubsonic: {}', tostring(setup_err)) end
-  actions.setup()
+  browser = nil
+  local _, setup_err = deck.plugin.load 'music'
+  if setup_err then deck.log('warn', 'failed to setup music plugin from opensubsonic: {}', tostring(setup_err)) end
 end
 
 function M.list(path, cb)
   local ok, err = api.ensure_configured()
   if not ok then
-    local entries = config_entries(err)
-    cb(entries)
+    cb(config_entries(err))
     return
   end
 
-  root.list(path, cb)
+  local get_ok, b_or_err = pcall(ensure_browser)
+  if not get_ok then
+    cb(config_entries(b_or_err))
+    return
+  end
+
+  b_or_err:list(path, cb)
 end
 
 function M.preview(entry, cb)
@@ -51,7 +67,12 @@ function M.preview(entry, cb)
     return
   end
 
-  cb(shared.preview_lines { shared.join_path(lc.api.get_hovered_path() or {}) })
+  local get_ok, b_or_err = pcall(ensure_browser)
+  if get_ok then
+    b_or_err:preview(entry, cb)
+  else
+    cb(tostring(b_or_err))
+  end
 end
 
 return M
