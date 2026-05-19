@@ -1,5 +1,13 @@
 local M = {}
 
+function M.meta()
+  return {
+    icon = '󰓃',
+    desc = 'OpenSubsonic music browser',
+    color = 'green',
+  }
+end
+
 local api = require 'opensubsonic.api'
 local config = require 'opensubsonic.config'
 local provider = require 'opensubsonic.provider'
